@@ -21,6 +21,14 @@ import TrackEngagementModal from "../layouts/components/TrackEngagementModal";
 
 const randomSeed = Math.floor(Math.random() * 10000) + 1;
 
+// Chuẩn hóa dữ liệu API về mảng (dùng cho cả dữ liệu trang chủ lẫn gợi ý AI)
+const ensureArray = (resData) => {
+  if (Array.isArray(resData)) return resData;
+  if (Array.isArray(resData?.content)) return resData.content;
+  if (Array.isArray(resData?.data)) return resData.data;
+  return [];
+};
+
 // === COMPONENT PHỤ: BĂNG CHUYỀN ĐIỀU HƯỚNG TAY ===
 const AutoScrollCarousel = ({ title, items, renderItem, onViewAll }) => {
   const scrollRef = useRef(null);
@@ -127,13 +135,6 @@ const HomePage = () => {
             axiosClient.get("/albums"),
             axiosClient.get("/tracks/top5-views"),
           ]);
-
-        const ensureArray = (resData) => {
-          if (Array.isArray(resData)) return resData;
-          if (Array.isArray(resData?.content)) return resData.content;
-          if (Array.isArray(resData?.data)) return resData.data;
-          return [];
-        };
 
         setTracks(ensureArray(tracksRes?.data));
         setArtists(ensureArray(artistsRes?.data));
