@@ -195,7 +195,7 @@ const LoginPage = () => {
           </button>
         </form>
 
-        <div className="mt-4 text-center text-xs text-[#a7a7a7]">
+        {/* <div className="mt-4 text-center text-xs text-[#a7a7a7]">
           <button
             onClick={() => {
               window.location.href = `${BASE_API_URL}/oauth2/authorization/google`;
@@ -211,7 +211,7 @@ const LoginPage = () => {
             />
             Continue with Google
           </button>
-        </div>
+        </div> */}
 
         <div className="mt-8 text-center text-xs text-[#a7a7a7] border-t border-[#282828] pt-6">
           Chưa có tài khoản?{" "}
