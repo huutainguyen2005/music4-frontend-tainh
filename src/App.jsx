@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import HomePage from "./pages/HomePage";
 import RegisterPage from "./pages/RegisterPage.jsx";
@@ -30,6 +31,13 @@ import {CreateTrackPage} from "./pages/CreateTrackPage.jsx";
 
 function AppContent() {
   const errorStatus = useErrorStore((state) => state.errorStatus);
+  const clearError = useErrorStore((state) => state.clearError);
+  const location = useLocation();
+
+  // Đổi trang (kể cả nút Back của trình duyệt) thì bỏ trang lỗi toàn màn hình, tránh kẹt vĩnh viễn.
+  useEffect(() => {
+    clearError();
+  }, [location.pathname, clearError]);
 
   if (errorStatus === 401) {
     return <UnauthorizedPage />;

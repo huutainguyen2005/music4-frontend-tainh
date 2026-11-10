@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { replaceBlobUrl } from "../utils/blobUrl";
 import { useParams, useNavigate } from "react-router-dom";
 import { getMediaUrl } from "../app/config";
 import {NotificationModal} from "../layouts/components/Modal";
@@ -1097,7 +1098,7 @@ const ArtistProfilePage = () => {
                           return;
                         }
                         setSelectedCover(file);
-                        setPreviewCover(URL.createObjectURL(file));
+                        setPreviewCover(replaceBlobUrl(previewCover, file));
                       }
                     }}
                   />
@@ -1140,7 +1141,7 @@ const ArtistProfilePage = () => {
                           return;
                         }
                         setSelectedAvatar(file);
-                        setPreviewAvatar(URL.createObjectURL(file));
+                        setPreviewAvatar(replaceBlobUrl(previewAvatar, file));
                       }
                     }}
                   />
@@ -1221,12 +1222,6 @@ const ArtistProfilePage = () => {
             </div>
           </div>
         </div>
-      )}
-      {selectedTrack && (
-        <TrackEngagementModal
-          track={selectedTrack}
-          onClose={() => setSelectedTrack(null)}
-        />
       )}
     </div>
   );

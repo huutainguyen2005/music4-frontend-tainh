@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { replaceBlobUrl } from "../utils/blobUrl";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Edit2,
@@ -138,7 +139,7 @@ const ProfilePage = () => {
         return;
       }
       setSelectedFile(file);
-      setPreviewImg(URL.createObjectURL(file));
+      setPreviewImg(replaceBlobUrl(previewImg, file));
     }
   };
 

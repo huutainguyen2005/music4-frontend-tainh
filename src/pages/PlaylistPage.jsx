@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { replaceBlobUrl } from "../utils/blobUrl";
 import { useParams, useNavigate } from "react-router-dom";
 import { usePlayerStore } from "../features/player/usePlayerStore";
 import { usePlaylistStore } from "../features/playlist/usePlaylistStore"; // Đảm bảo đúng đường dẫn 1 cấp lùi
@@ -78,7 +79,7 @@ const PlaylistPage = () => {
         return;
       }
       setEditAvatar(file);
-      setAvatarPreview(URL.createObjectURL(file));
+      setAvatarPreview(replaceBlobUrl(avatarPreview, file));
     }
   };
 

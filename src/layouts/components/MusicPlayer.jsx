@@ -111,8 +111,11 @@ const MusicPlayer = () => {
   const volumeBarRef = useRef(null);
 
   useEffect(() => {
+    // Chỉ lắng nghe chuột trên window khi đang kéo thanh âm lượng.
+    if (!isDraggingVolume) return undefined;
+
     const handleMouseMove = (e) => {
-      if (!isDraggingVolume || !volumeBarRef.current) return;
+      if (!volumeBarRef.current) return;
 
       updateVolume(e.clientX, volumeBarRef.current);
     };

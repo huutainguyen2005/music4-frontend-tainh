@@ -196,6 +196,11 @@ export function CreateTrackPage() {
             }
         }
 
+        if (isEditMode && audioFile) {
+            setErrorMessage("Hiện chưa hỗ trợ thay file âm thanh khi sửa bài hát. Hãy bỏ chọn file hoặc tải bài mới.");
+            return;
+        }
+
         if (!isEditMode && !coverImage) {
             setErrorMessage("Vui lòng chọn ảnh bìa cho bài hát!");
             return;
@@ -245,10 +250,34 @@ export function CreateTrackPage() {
         if (coverImage) formData.append("coverImage", coverImage);
 
         try {
-            const url = isEditMode ? `/tracks/update/${editTrackData.id}` : "/tracks";
-            await axiosClient.post(url, formData, {
-                headers: { "Content-Type": "multipart/form-data" },
-            });
+            if (isEditMode) {
+                // Backend: PUT /tracks/update/{id} chỉ nhận JSON. Ảnh bìa mới phải upload tạm trước để lấy key.
+                let newImgKey;
+                if (coverImage) {
+                    const coverForm = new FormData();
+                    coverForm.append("file", coverImage);
+                    coverForm.append("type", "images");
+                    const uploadRes = await axiosClient.post("/tracks/upload-temp", coverForm, {
+                        headers: { "Content-Type": "multipart/form-data" },
+                    });
+                    newImgKey = uploadRes.data?.s3Key || uploadRes.data?.objectKey;
+                }
+                const parsedAlbumId = parseInt(albumId);
+                const updateBody = {
+                    title: title.trim(),
+                    duration: duration ? parseInt(duration) : undefined,
+                    // -1 = gỡ bài khỏi album; bỏ trống = giữ nguyên
+                    albumId: !isNaN(parsedAlbumId) ? parsedAlbumId : (editTrackData?.albumId ? -1 : undefined),
+                    categoryIds,
+                    artistIds: selectedFeatArtists.filter((a) => a.id).map((a) => a.id),
+                    img: newImgKey,
+                };
+                await axiosClient.put(`/tracks/update/${editTrackData.id}`, updateBody);
+            } else {
+                await axiosClient.post("/tracks", formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
+            }
 
             alert(isEditMode ? "🎉 Cập nhật bài hát thành công!" : "🎉 Tải lên bài hát thành công!");
             navigate(`/artist/${artistId}`);

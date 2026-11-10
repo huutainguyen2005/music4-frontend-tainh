@@ -6,6 +6,9 @@ export const useFollowStore = create((set, get) => ({
     followedArtistIds: [], // Lưu mảng ID nghệ sĩ đã follow: [1, 2, 5...]
     isLoadingFollow: false,
 
+    // Xóa dữ liệu follow của tài khoản cũ khi đăng xuất
+    clearFollowStore: () => set({ followedArtistIds: [], isLoadingFollow: false }),
+
     // Lấy danh sách ID các nghệ sĩ đã follow từ backend
     fetchFollowedArtists: async () => {
         const userId = useAuthStore.getState().userId;

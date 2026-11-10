@@ -13,7 +13,7 @@ const AlbumDetailPage = () => {
     const navigate = useNavigate();
     const { playTrack, currentTrack } = usePlayerStore();
     const toMediaUrl = (key) => getMediaUrl(key);
-    const { userId, role } = useAuthStore();
+    const { artistId, role } = useAuthStore();
 
     // --- State quản lý dữ liệu ---
     const [tracks, setTracks] = useState([]);
@@ -94,9 +94,10 @@ const AlbumDetailPage = () => {
         return (
             role === 'artist' &&
             albumInfo?.artistId !== undefined &&
-            Number(userId) === Number(albumInfo?.artistId)
+            artistId != null &&
+            Number(artistId) === Number(albumInfo?.artistId)
         );
-    }, [role, userId, albumInfo]);
+    }, [role, artistId, albumInfo]);
 
     // --- Xử lý bấm nút Play/Pause trên giao diện ---
     const handlePlayTrack = (track) => {

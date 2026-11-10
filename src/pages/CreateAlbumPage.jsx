@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { replaceBlobUrl } from "../utils/blobUrl";
 import { useNavigate } from "react-router-dom";
 import {
     FolderPlus,
@@ -149,7 +150,7 @@ const CreateAlbumPage = () => {
 
         setErrorMessage(""); // Clear error when selecting a new valid cover
         setAlbumCoverFile(file);
-        setAlbumCoverPreview(URL.createObjectURL(file));
+        setAlbumCoverPreview(replaceBlobUrl(albumCoverPreview, file));
         setAlbumCoverProgress(0); // Reset tiến trình về 0
     };
 

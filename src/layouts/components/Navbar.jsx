@@ -16,6 +16,7 @@ import axiosClient from "../../app/axios/axiosClient";
 import { API_BASE } from "../../app/config";
 import { useFavoriteStore } from "../../features/favorite/useFavoriteStore";
 import { usePlaylistStore } from "../../features/playlist/usePlaylistStore";
+import { useFollowStore } from "../../features/follow/useFollowStore";
 import { usePlayerStore } from "../../features/player/usePlayerStore";
 
 const Navbar = () => {
@@ -65,11 +66,13 @@ const Navbar = () => {
       `${API_BASE}/notifications/subscribe/${id}${token ? `?token=${encodeURIComponent(token)}` : ""}`,
     );
 
-    eventSource.addEventListener("NEW_TRACK", (event) => {
+    const handleNewNotification = (event) => {
       const newNoti = JSON.parse(event.data);
       setNotifications((prev) => [newNoti, ...prev]);
       setUnreadCount((prev) => prev + 1);
-    });
+    };
+    eventSource.addEventListener("NEW_TRACK", handleNewNotification);
+    eventSource.addEventListener("NEW_ALBUM", handleNewNotification);
 
     eventSource.onerror = (err) => {
       console.error("Lß╗ùi kß║┐t nß╗æi SSE:", err);
@@ -171,7 +174,8 @@ const Navbar = () => {
     } catch (error) {
       console.error("Logout API error:", error);
     } finally {
-      useFavoriteStore.getState().clearLikedStore?.();
+      useFavoriteStore.getState().clearFavoriteStore?.();
+      useFollowStore.getState().clearFollowStore?.();
       usePlaylistStore.getState().clearPlaylistStore?.();
 
       logout();
