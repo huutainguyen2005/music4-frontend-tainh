@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { replaceBlobUrl } from "../utils/blobUrl";
 import { useNavigate } from "react-router-dom";
 import {
     FolderPlus,
@@ -17,7 +16,8 @@ import { validateAudioFile, validateImageFile, getApiErrorMessage } from "../uti
 
 const CreateAlbumPage = () => {
     const navigate = useNavigate();
-    const { userId, username } = useAuthStore(); // Lấy thêm username để so sánh tên nghệ sĩ
+    const { userId, artistId: storeArtistId, setArtistId: setStoreArtistId, username } = useAuthStore();
+    const [currentArtistId, setCurrentArtistId] = useState(storeArtistId);
 
     // --- State quản lý thông tin Album ---
     const [albumName, setAlbumName] = useState("");
@@ -86,7 +86,7 @@ const CreateAlbumPage = () => {
     // 🎯 Hàm helper kiểm tra xem 1 artist trong DB có phải là nghệ sĩ đang đăng nhập hay không
     const isCurrentArtist = (artist) => {
         return (
-            Number(artist.id) === Number(userId) ||
+            (currentArtistId && Number(artist.id) === Number(currentArtistId)) ||
             Number(artist.userId) === Number(userId) ||
             Number(artist.user?.id) === Number(userId) ||
             (artist.name && username && artist.name.trim().toLowerCase() === username.trim().toLowerCase())
@@ -119,20 +119,43 @@ const CreateAlbumPage = () => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [activeDropdownId]);
 
-    // Lấy danh sách nghệ sĩ đổ vào Dropdown Feat Artist
+    // Lấy danh sách nghệ sĩ & ID nghệ sĩ đang đăng nhập
     useEffect(() => {
         const fetchArtists = async () => {
             try {
-                const catRes = await axiosClient.get("/categories"); // Thay đổi đường dẫn nếu cần
+                let resolvedArtistId = storeArtistId;
+                if (!resolvedArtistId) {
+                    try {
+                        const meRes = await axiosClient.get("/artists/me");
+                        resolvedArtistId = meRes.data?.id || meRes.id || null;
+                        if (resolvedArtistId) {
+                            setStoreArtistId(resolvedArtistId);
+                        }
+                    } catch (meErr) {
+                        console.warn("Không thể tải thông tin nghệ sĩ /artists/me:", meErr);
+                    }
+                }
+                setCurrentArtistId(resolvedArtistId);
+
+                const catRes = await axiosClient.get("/categories");
                 setCategories(catRes.data || []);
                 const res = await axiosClient.get("/artists/all");
-                setDbArtists(res.data || []);
+                const artistList = res.data || [];
+                setDbArtists(artistList);
+
+                if (!resolvedArtistId && userId && Array.isArray(artistList)) {
+                    const matched = artistList.find(a => Number(a.userId) === Number(userId));
+                    if (matched?.id) {
+                        setCurrentArtistId(matched.id);
+                        setStoreArtistId(matched.id);
+                    }
+                }
             } catch (err) {
                 console.error("Không lấy được danh sách ca sĩ:", err);
             }
         };
         fetchArtists();
-    }, []);
+    }, [userId, storeArtistId, setStoreArtistId]);
 
     // 🌟 BƯỚC 1: Chọn ảnh bìa -> Kiểm tra validate chặt chẽ trước khi preview
     const handleAlbumCoverChange = (e) => {
@@ -150,7 +173,7 @@ const CreateAlbumPage = () => {
 
         setErrorMessage(""); // Clear error when selecting a new valid cover
         setAlbumCoverFile(file);
-        setAlbumCoverPreview(replaceBlobUrl(albumCoverPreview, file));
+        setAlbumCoverPreview(URL.createObjectURL(file));
         setAlbumCoverProgress(0); // Reset tiến trình về 0
     };
 
@@ -190,7 +213,7 @@ const CreateAlbumPage = () => {
                 title: file.name.replace(/\.[^/.]+$/, "").substring(0, 100),
                 file: file,
                 duration: 0,
-                artistId: userId || 7,
+                artistId: currentArtistId || storeArtistId || userId,
                 artistIds: [],      // Dùng để gửi ID lên Backend
                 featArtists: [],    // Dùng để lưu Object {id, name} hiển thị trên UI
                 categoryIds: [],
@@ -291,6 +314,12 @@ const CreateAlbumPage = () => {
             }
         }
 
+        const effectiveArtistId = currentArtistId || storeArtistId;
+        if (!effectiveArtistId) {
+            setErrorMessage("Không xác định được ID nghệ sĩ. Vui lòng đăng nhập lại!");
+            return;
+        }
+
         try {
             setIsSubmitting(true);
 
@@ -366,7 +395,7 @@ const CreateAlbumPage = () => {
                         title: track.title,
                         audioFileKey: trackRes.data.s3Key, // Lấy S3 Key vừa sinh ra
                         duration: trackRes.data.duration || 0, // Lấy thời lượng Backend đo được
-                        artistId: track.artistId,
+                        artistId: parseInt(effectiveArtistId),
                         artistIds: track.artistIds,
                         categoryIds: track.categoryIds,
                     });
@@ -386,13 +415,14 @@ const CreateAlbumPage = () => {
             // 1. Tạo Album lấy albumId
             const albumFormData = new FormData();
             albumFormData.append("albumTitle", albumName.trim());
-            albumFormData.append("artistId", userId);
+            albumFormData.append("artistId", parseInt(effectiveArtistId));
             albumFormData.append("coverImageKey", finalCoverKey);
 
             const albumRes = await axiosClient.post("/albums", albumFormData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
             const generatedAlbumId = albumRes.data.id;
+            const targetArtistId = albumRes.data.artistId || effectiveArtistId;
 
             // 2. Gom tất cả ném vào API Bulk-Json
             const finalBulkPayload = {
@@ -406,7 +436,7 @@ const CreateAlbumPage = () => {
             alert(
                 "🎉 Album và toàn bộ danh sách nhạc đã được phát hành thành công!",
             );
-            navigate(`/artist/${userId}`);
+            navigate(`/artist/${targetArtistId}`);
         } catch (error) {
             console.error("Lỗi trong quá trình phát hành:", error);
             const apiMessage = getApiErrorMessage(error, "Phát hành thất bại, vui lòng kiểm tra lại hệ thống!");

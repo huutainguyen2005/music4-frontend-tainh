@@ -46,7 +46,8 @@ export function CreateTrackPage() {
     const prefilledAlbumName = location.state?.albumName;
 
     // Lấy thông tin nghệ sĩ đang đăng nhập từ AuthStore
-    const { userId, username } = useAuthStore();
+    const { userId, artistId: storeArtistId, setArtistId: setStoreArtistId, username } = useAuthStore();
+    const [currentArtistId, setCurrentArtistId] = useState(storeArtistId);
 
     useEffect(() => {
         if (prefilledAlbumId) {
@@ -55,18 +56,30 @@ export function CreateTrackPage() {
         }
     }, [prefilledAlbumId, prefilledAlbumName]);
 
-    // --- 3. USEEFFECT: LOAD DANH SÁCH THỂ LOẠI & NGHỆ SĨ KHI MỞ TRANG ---
+    // --- 3. USEEFFECT: LOAD DANH SÁCH THỂ LOẠI, NGHỆ SĨ & ALBUM CỦA NGHỆ SĨ ĐANG ĐĂNG NHẬP ---
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [categoriesRes, artistsRes, albumsRes] = await Promise.all([
+                let resolvedArtistId = storeArtistId;
+                if (!resolvedArtistId) {
+                    try {
+                        const meRes = await axiosClient.get("/artists/me");
+                        resolvedArtistId = meRes.data?.id || meRes.id || null;
+                        if (resolvedArtistId) {
+                            setStoreArtistId(resolvedArtistId);
+                        }
+                    } catch (meErr) {
+                        console.warn("Không thể tải thông tin nghệ sĩ /artists/me:", meErr);
+                    }
+                }
+                setCurrentArtistId(resolvedArtistId);
+
+                const [categoriesRes, artistsRes] = await Promise.all([
                     categoryService.getAllCategories(),
                     artistService.getAllArtistsNoPageable(),
-                    axiosClient.get(`/albums/artist/${userId}`)
                 ]);
 
                 setDbCategories(categoriesRes.data || categoriesRes);
-                setDbAlbums(albumsRes.data || []);
 
                 let artistList = [];
                 if (artistsRes.data) {
@@ -74,7 +87,25 @@ export function CreateTrackPage() {
                 } else {
                     artistList = artistsRes.content || artistsRes;
                 }
-                setDbArtists(Array.isArray(artistList) ? artistList : []);
+                const finalArtistList = Array.isArray(artistList) ? artistList : [];
+                setDbArtists(finalArtistList);
+
+                if (!resolvedArtistId && userId) {
+                    const matched = finalArtistList.find(a => Number(a.userId) === Number(userId));
+                    if (matched?.id) {
+                        resolvedArtistId = matched.id;
+                        setCurrentArtistId(resolvedArtistId);
+                        setStoreArtistId(resolvedArtistId);
+                    }
+                }
+
+                if (resolvedArtistId) {
+                    const albumsRes = await axiosClient.get(`/albums/artist/${resolvedArtistId}`);
+                    const albumList = albumsRes.data?.content || albumsRes.data?.data || albumsRes.data || [];
+                    setDbAlbums(Array.isArray(albumList) ? albumList : []);
+                } else {
+                    setDbAlbums([]);
+                }
             } catch (error) {
                 console.error("Lỗi khi tải dữ liệu từ hệ thống:", error);
                 setErrorMessage("Khởi tạo dữ liệu thất bại. Vui lòng thử lại sau!");
@@ -82,7 +113,7 @@ export function CreateTrackPage() {
         };
 
         fetchInitialData();
-    }, [userId]);
+    }, [userId, storeArtistId, setStoreArtistId]);
 
     // --- 4. USEEFFECT LẤY CHI TIẾT BÀI HÁT CŨ NẾU LÀ CHẾ ĐỘ EDIT ---
     useEffect(() => {
@@ -103,7 +134,10 @@ export function CreateTrackPage() {
                         }
 
                         if (fullTrack.artists) {
-                            const featList = fullTrack.artists.filter(artist => Number(artist.id) !== Number(userId));
+                            const featList = fullTrack.artists.filter(artist =>
+                                artist.role === "FEAT" ||
+                                (artist.role !== "MAIN" && Number(artist.id) !== Number(currentArtistId || userId))
+                            );
                             setSelectedFeatArtists(featList);
                         }
 
@@ -123,7 +157,7 @@ export function CreateTrackPage() {
         };
 
         fetchFullTrackDetails();
-    }, [editTrackData, isEditMode, userId]);
+    }, [editTrackData, isEditMode, currentArtistId, userId]);
 
     // Tự động đóng dropdown khi click ra ngoài
     useEffect(() => {
@@ -161,10 +195,17 @@ export function CreateTrackPage() {
         setSelectedFeatArtists(selectedFeatArtists.filter(a => a.id !== artistId));
     };
 
+    const isSelfArtist = (artist) => {
+        return (
+            (currentArtistId && Number(artist.id) === Number(currentArtistId)) ||
+            (userId && Number(artist.userId) === Number(userId))
+        );
+    };
+
     const filteredArtists = dbArtists.filter(artist =>
         artist.name.toLowerCase().includes(artistSearch.toLowerCase()) &&
         !selectedFeatArtists.some(selected => selected.id === artist.id) &&
-        Number(artist.id) !== Number(userId)
+        !isSelfArtist(artist)
     );
 
     // --- 5. LUỒNG XỬ LÝ SUBMIT FORM & THÔNG BÁO LỖI ---
@@ -196,11 +237,6 @@ export function CreateTrackPage() {
             }
         }
 
-        if (isEditMode && audioFile) {
-            setErrorMessage("Hiện chưa hỗ trợ thay file âm thanh khi sửa bài hát. Hãy bỏ chọn file hoặc tải bài mới.");
-            return;
-        }
-
         if (!isEditMode && !coverImage) {
             setErrorMessage("Vui lòng chọn ảnh bìa cho bài hát!");
             return;
@@ -219,7 +255,7 @@ export function CreateTrackPage() {
             return;
         }
 
-        const artistId = userId;
+        const artistId = currentArtistId || storeArtistId;
         if (!artistId || isNaN(parseInt(artistId))) {
             setErrorMessage("Không xác định được ID nghệ sĩ. Vui lòng đăng nhập lại!");
             return;
@@ -250,34 +286,10 @@ export function CreateTrackPage() {
         if (coverImage) formData.append("coverImage", coverImage);
 
         try {
-            if (isEditMode) {
-                // Backend: PUT /tracks/update/{id} chỉ nhận JSON. Ảnh bìa mới phải upload tạm trước để lấy key.
-                let newImgKey;
-                if (coverImage) {
-                    const coverForm = new FormData();
-                    coverForm.append("file", coverImage);
-                    coverForm.append("type", "images");
-                    const uploadRes = await axiosClient.post("/tracks/upload-temp", coverForm, {
-                        headers: { "Content-Type": "multipart/form-data" },
-                    });
-                    newImgKey = uploadRes.data?.s3Key || uploadRes.data?.objectKey;
-                }
-                const parsedAlbumId = parseInt(albumId);
-                const updateBody = {
-                    title: title.trim(),
-                    duration: duration ? parseInt(duration) : undefined,
-                    // -1 = gỡ bài khỏi album; bỏ trống = giữ nguyên
-                    albumId: !isNaN(parsedAlbumId) ? parsedAlbumId : (editTrackData?.albumId ? -1 : undefined),
-                    categoryIds,
-                    artistIds: selectedFeatArtists.filter((a) => a.id).map((a) => a.id),
-                    img: newImgKey,
-                };
-                await axiosClient.put(`/tracks/update/${editTrackData.id}`, updateBody);
-            } else {
-                await axiosClient.post("/tracks", formData, {
-                    headers: { "Content-Type": "multipart/form-data" },
-                });
-            }
+            const url = isEditMode ? `/tracks/update/${editTrackData.id}` : "/tracks";
+            await axiosClient.post(url, formData, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
 
             alert(isEditMode ? "🎉 Cập nhật bài hát thành công!" : "🎉 Tải lên bài hát thành công!");
             navigate(`/artist/${artistId}`);
@@ -541,7 +553,7 @@ export function CreateTrackPage() {
                     <div className="flex justify-end gap-3 pt-4 border-t border-white/[0.05]">
                         <button
                             type="button"
-                            onClick={() => navigate(`/artist/${userId}`)}
+                            onClick={() => navigate(`/artist/${currentArtistId || storeArtistId || userId}`)}
                             disabled={loading}
                             className="px-5 py-2 rounded-full text-sm font-medium bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] transition-colors border-none cursor-pointer"
                         >

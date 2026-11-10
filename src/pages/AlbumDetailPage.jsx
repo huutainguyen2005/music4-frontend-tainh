@@ -13,7 +13,8 @@ const AlbumDetailPage = () => {
     const navigate = useNavigate();
     const { playTrack, currentTrack } = usePlayerStore();
     const toMediaUrl = (key) => getMediaUrl(key);
-    const { artistId, role } = useAuthStore();
+    const { userId, artistId: storeArtistId, role } = useAuthStore();
+    const [currentArtistId, setCurrentArtistId] = useState(storeArtistId);
 
     // --- State quản lý dữ liệu ---
     const [tracks, setTracks] = useState([]);
@@ -62,6 +63,19 @@ const AlbumDetailPage = () => {
                 setIsLoading(true);
                 setError(null);
 
+                if (role === 'artist' && !storeArtistId) {
+                    try {
+                        const meRes = await axiosClient.get("/artists/me");
+                        if (meRes.data?.id) {
+                            setCurrentArtistId(meRes.data.id);
+                        }
+                    } catch (e) {
+                        console.warn("Không thể tải /artists/me:", e);
+                    }
+                } else {
+                    setCurrentArtistId(storeArtistId);
+                }
+
                 const response = await axiosClient.get(`/tracks/album/${albumId}`);
                 console.log("Dữ liệu API trả về:", response.data);
                 const trackData = response.data || [];
@@ -76,6 +90,21 @@ const AlbumDetailPage = () => {
                         artistId: mainArtist?.id,
                         coverUrl: trackData[0].img ? toMediaUrl(trackData[0].img) : ""
                     });
+                } else {
+                    try {
+                        const detailRes = await axiosClient.get(`/albums/${albumId}`);
+                        const albumObj = detailRes.data?.album || detailRes.data;
+                        if (albumObj) {
+                            setAlbumInfo({
+                                albumTitle: albumObj.name || "Album Kỷ Nguyên Mới",
+                                artistName: albumObj.artistName || "Nghệ Sĩ",
+                                artistId: albumObj.artistId,
+                                coverUrl: albumObj.img ? toMediaUrl(albumObj.img) : ""
+                            });
+                        }
+                    } catch (detailErr) {
+                        console.warn("Không thể tải chi tiết album:", detailErr);
+                    }
                 }
             } catch (err) {
                 console.error("Lỗi khi bốc bài hát của Album:", err);
@@ -88,16 +117,15 @@ const AlbumDetailPage = () => {
         if (albumId) {
             fetchAlbumTracks();
         }
-    }, [albumId]);
+    }, [albumId, role, storeArtistId]);
 
     const isOwner = React.useMemo(() => {
         return (
             role === 'artist' &&
             albumInfo?.artistId !== undefined &&
-            artistId != null &&
-            Number(artistId) === Number(albumInfo?.artistId)
+            Number(currentArtistId || storeArtistId || userId) === Number(albumInfo?.artistId)
         );
-    }, [role, artistId, albumInfo]);
+    }, [role, currentArtistId, storeArtistId, userId, albumInfo]);
 
     // --- Xử lý bấm nút Play/Pause trên giao diện ---
     const handlePlayTrack = (track) => {

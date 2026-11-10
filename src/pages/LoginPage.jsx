@@ -13,8 +13,15 @@ const autofillStyle = {
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { loginSuccess, error, setAuthError, isLoading, setLoading } =
-    useAuthStore();
+  const {
+    loginSuccess,
+    updateProfile,
+    setArtistId,
+    error,
+    setAuthError,
+    isLoading,
+    setLoading,
+  } = useAuthStore();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -33,7 +40,7 @@ const LoginPage = () => {
       });
 
       // Trích xuất các trường cơ bản từ phản hồi Backend
-      const { accessToken, refreshToken, id, img } = response.data;
+      const { accessToken, refreshToken, id, img, artistId } = response.data;
 
       // --- XỬ LÝ TRÍCH XUẤT AN TOÀN FRONTEND: GIẢI MÃ TOKEN ---
       const base64Url = accessToken.split(".")[1];
@@ -74,7 +81,27 @@ const LoginPage = () => {
         finalUsername,
         img,
         finalRole,
+        artistId || decodedToken.artistId,
       );
+
+      // Nếu là nghệ sĩ, lấy thêm avatar (img) và artistId từ hồ sơ nghệ sĩ bên content-service
+      if (finalRole === "artist") {
+        try {
+          const meRes = await axiosClient.get("/artists/me");
+          const artistData = meRes.data;
+          if (artistData) {
+            if (artistData.id) {
+              setArtistId(artistData.id);
+            }
+            if (artistData.img || artistData.name) {
+              updateProfile(artistData.name || decodedToken.name || finalUsername, artistData.img || img);
+            }
+          }
+        } catch (artistErr) {
+          console.warn("Không thể tải hồ sơ nghệ sĩ khi đăng nhập:", artistErr);
+        }
+      }
+
       if (finalRole === "admin") {
         navigate("/admin"); // Nếu là admin, đẩy thẳng vào Dashboard
       } else {
@@ -168,7 +195,23 @@ const LoginPage = () => {
           </button>
         </form>
 
-        
+        <div className="mt-4 text-center text-xs text-[#a7a7a7]">
+          <button
+            onClick={() => {
+              window.location.href = `${BASE_API_URL}/oauth2/authorization/google`;
+            }}
+            className="google-btn flex items-center justify-center mx-auto"
+          >
+            <img
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+              width="20"
+              height="20"
+              alt="Google icon"
+              className="mr-2"
+            />
+            Continue with Google
+          </button>
+        </div>
 
         <div className="mt-8 text-center text-xs text-[#a7a7a7] border-t border-[#282828] pt-6">
           Chưa có tài khoản?{" "}

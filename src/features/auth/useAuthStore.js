@@ -7,13 +7,27 @@ const getSafeParsedJSON = (key) => {
         if (!item || item === "undefined" || item === "null") return null;
         return JSON.parse(item);
     } catch (e) {
+        const raw = localStorage.getItem(key);
+        return raw && raw !== "undefined" && raw !== "null" ? raw : null;
+    }
+};
+
+const getInitialArtistId = () => {
+    const stored = localStorage.getItem('artistId');
+    if (stored && stored !== "undefined" && stored !== "null") return stored;
+    try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) return null;
+        const payload = jwtDecode(token);
+        return payload?.artistId ? String(payload.artistId) : null;
+    } catch {
         return null;
     }
 };
 
 export const useAuthStore = create((set) => ({
     userId: localStorage.getItem('userId') || null,
-    artistId: localStorage.getItem('artistId') || null,
+    artistId: getInitialArtistId(),
     username: localStorage.getItem('username') || null,
     img: localStorage.getItem('userImg') || null,
     name: getSafeParsedJSON('name'),
@@ -22,10 +36,10 @@ export const useAuthStore = create((set) => ({
     isLoading: false,
     error: null,
 
-    loginSuccess: (accessToken, refreshToken, id, username, img, role) => {
+    loginSuccess: (accessToken, refreshToken, id, username, img, role, artistId) => {
         const payload = jwtDecode(accessToken);
         const name = payload?.name || null;
-        const artistId = payload?.artistId != null ? String(payload.artistId) : null;
+        const resolvedArtistId = artistId || payload?.artistId || null;
 
         let finalRole = (role || '').replace('ROLE_', '').toLowerCase();
         if (finalRole === 'user') finalRole = 'listener';
@@ -33,8 +47,8 @@ export const useAuthStore = create((set) => ({
         localStorage.setItem('accessToken', accessToken);
         if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
         if (id) localStorage.setItem('userId', id);
-        if (artistId) {
-            localStorage.setItem('artistId', artistId);
+        if (resolvedArtistId) {
+            localStorage.setItem('artistId', String(resolvedArtistId));
         } else {
             localStorage.removeItem('artistId');
         }
@@ -47,11 +61,15 @@ export const useAuthStore = create((set) => ({
 
         if (username) localStorage.setItem('username', username);
         if (finalRole) localStorage.setItem('role', finalRole);
-        if (img && img !== 'null') localStorage.setItem('userImg', img);
+        if (img && img !== 'null') {
+            localStorage.setItem('userImg', img);
+        } else {
+            localStorage.removeItem('userImg');
+        }
 
         set({
             userId: id,
-            artistId: artistId,
+            artistId: resolvedArtistId ? String(resolvedArtistId) : null,
             username: username,
             img: img && img !== 'null' ? img : null,
             name: name,
@@ -75,6 +93,15 @@ export const useAuthStore = create((set) => ({
         });
     },
 
+    setArtistId: (artistId) => {
+        if (artistId) {
+            localStorage.setItem('artistId', String(artistId));
+        } else {
+            localStorage.removeItem('artistId');
+        }
+        set({ artistId: artistId ? String(artistId) : null });
+    },
+
     setAuthError: (errorMsg) => set({ error: errorMsg }),
     setLoading: (isLoading) => set({ isLoading }),
 
@@ -94,7 +121,7 @@ export const useAuthStore = create((set) => ({
             if (finalRole === "user") finalRole = "listener";
 
             const finalUserId = payload.id ? String(payload.id) : null;
-            const finalArtistId = payload.artistId != null ? String(payload.artistId) : null;
+            const finalArtistId = payload.artistId ? String(payload.artistId) : null;
             const finalUsername = payload.sub || null;
             const name = payload.name ? String(payload.name) : null;
 
@@ -113,7 +140,11 @@ export const useAuthStore = create((set) => ({
                 localStorage.removeItem("name");
             }
 
-            if (payload.img && payload.img !== 'null') localStorage.setItem("userImg", payload.img);
+            if (payload.img && payload.img !== 'null') {
+                localStorage.setItem("userImg", payload.img);
+            } else {
+                localStorage.removeItem("userImg");
+            }
 
             set({
                 userId: finalUserId,
@@ -134,14 +165,17 @@ export const useAuthStore = create((set) => ({
     },
 
     updateProfile: (newName, newImg) => {
-        // Chỉ nhận chuỗi: ArtistProfilePage có lúc truyền cả đối tượng File (sẽ bị lưu thành "[object File]").
-        const cleanImg = typeof newImg === 'string' && newImg && newImg !== 'null' ? newImg : null;
-        // 'name' luôn lưu dạng JSON giống loginSuccess, để getSafeParsedJSON đọc lại được sau khi tải lại trang.
-        if (newName) localStorage.setItem('name', JSON.stringify(newName));
-        if (cleanImg) localStorage.setItem('userImg', cleanImg);
-        set((state) => ({
-            name: newName || state.name,
-            img: cleanImg || state.img,
-        }));
+        set((state) => {
+            if (newName) {
+                localStorage.setItem('name', JSON.stringify(newName));
+            }
+            if (newImg && newImg !== 'null') {
+                localStorage.setItem('userImg', newImg);
+            }
+            return {
+                name: newName || state.name,
+                img: newImg && newImg !== 'null' ? newImg : state.img
+            };
+        });
     },
 }));

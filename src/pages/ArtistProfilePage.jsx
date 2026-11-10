@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { replaceBlobUrl } from "../utils/blobUrl";
 import { useParams, useNavigate } from "react-router-dom";
 import { getMediaUrl } from "../app/config";
 import {NotificationModal} from "../layouts/components/Modal";
@@ -946,7 +945,7 @@ const ArtistProfilePage = () => {
                     {track.artists?.find((a) => a.role === "MAIN") &&
                       Number(
                         track.artists.find((a) => a.role === "MAIN").id,
-                      ) === Number(userId) && (
+                      ) === Number(artistInfo?.id || id) && isOwner && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -964,7 +963,7 @@ const ArtistProfilePage = () => {
                     {track.artists?.find((a) => a.role === "MAIN") &&
                       Number(
                         track.artists.find((a) => a.role === "MAIN").id,
-                      ) === Number(userId) && (
+                      ) === Number(artistInfo?.id || id) && isOwner && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1098,7 +1097,7 @@ const ArtistProfilePage = () => {
                           return;
                         }
                         setSelectedCover(file);
-                        setPreviewCover(replaceBlobUrl(previewCover, file));
+                        setPreviewCover(URL.createObjectURL(file));
                       }
                     }}
                   />
@@ -1141,7 +1140,7 @@ const ArtistProfilePage = () => {
                           return;
                         }
                         setSelectedAvatar(file);
-                        setPreviewAvatar(replaceBlobUrl(previewAvatar, file));
+                        setPreviewAvatar(URL.createObjectURL(file));
                       }
                     }}
                   />
@@ -1222,6 +1221,12 @@ const ArtistProfilePage = () => {
             </div>
           </div>
         </div>
+      )}
+      {selectedTrack && (
+        <TrackEngagementModal
+          track={selectedTrack}
+          onClose={() => setSelectedTrack(null)}
+        />
       )}
     </div>
   );
