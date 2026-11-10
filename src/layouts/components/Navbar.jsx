@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Search,
   Bell,
@@ -9,33 +9,40 @@ import {
   Check,
   X,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../features/auth/useAuthStore";
 import MusicImage from "./MusicImage.jsx";
 import axiosClient from "../../app/axios/axiosClient";
 import { API_BASE } from "../../app/config";
 import { useFavoriteStore } from "../../features/favorite/useFavoriteStore";
 import { usePlaylistStore } from "../../features/playlist/usePlaylistStore";
+import { useFollowStore } from "../../features/follow/useFollowStore";
 import { usePlayerStore } from "../../features/player/usePlayerStore";
 
 const Navbar = () => {
   const navigate = useNavigate();
 
-  const {
-    userId,
-    username,
-    name,
-    role,
-    img,
-    logout,
-    isAuthenticated,
-    updateProfile,
-    setArtistId,
-  } = useAuthStore();
+  const { userId, username, name, role, img, logout, isAuthenticated } =
+    useAuthStore();
   const id = userId;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const qFromUrl = searchParams.get("q") || "";
+  const [searchQuery, setSearchQuery] = useState(qFromUrl);
+
+  useEffect(() => {
+    if (location.pathname === "/search") {
+      setSearchQuery(qFromUrl);
+    }
+  }, [location.pathname, qFromUrl]);
+
+  const executeSearch = () => {
+    if (searchQuery.trim() !== "") {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
 
   // Lấy hàm playTrack từ Zustand store
   const playTrack = usePlayerStore((state) => state.playTrack);
@@ -45,31 +52,6 @@ const Navbar = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notiDropdownOpen, setNotiDropdownOpen] = useState(false);
   const notiDropdownRef = useRef(null);
-
-  // Đồng bộ avatar (img) và tên nghệ sĩ từ content-service (/artists/me) khi user có role artist
-  useEffect(() => {
-    if (!isAuthenticated || role !== "artist") return;
-
-    axiosClient
-      .get("/artists/me")
-      .then((res) => {
-        const artistData = res.data;
-        if (artistData) {
-          if (artistData.id) {
-            setArtistId?.(artistData.id);
-          }
-          if (artistData.img || artistData.name) {
-            updateProfile(
-              artistData.name || name || username,
-              artistData.img || img,
-            );
-          }
-        }
-      })
-      .catch((err) =>
-        console.error("Không thể đồng bộ thông tin nghệ sĩ trên Navbar:", err),
-      );
-  }, [isAuthenticated, role, id]);
 
   // LOGIC KẾT NỐI REAL-TIME VÀ LẤY THÔNG BÁO CŨ
   useEffect(() => {
@@ -93,18 +75,22 @@ const Navbar = () => {
       .catch((err) => console.error("Lỗi lấy thông báo cũ:", err));
 
     // Mở kết nối SSE lắng nghe thông báo mới (SSE vẫn dùng URL tuyệt đối)
+    // EventSource không gửi được header Authorization nên truyền token qua query
+    const token = localStorage.getItem("accessToken");
     const eventSource = new EventSource(
-      `${API_BASE}/notifications/subscribe/${id}`,
+      `${API_BASE}/notifications/subscribe/${id}${token ? `?token=${encodeURIComponent(token)}` : ""}`,
     );
 
-    eventSource.addEventListener("NEW_TRACK", (event) => {
+    const handleNewNotification = (event) => {
       const newNoti = JSON.parse(event.data);
       setNotifications((prev) => [newNoti, ...prev]);
       setUnreadCount((prev) => prev + 1);
-    });
+    };
+    eventSource.addEventListener("NEW_TRACK", handleNewNotification);
+    eventSource.addEventListener("NEW_ALBUM", handleNewNotification);
 
     eventSource.onerror = (err) => {
-      console.error("Lỗi kết nối SSE:", err);
+      console.error("Lß╗ùi kß║┐t nß╗æi SSE:", err);
     };
 
     return () => {
@@ -126,7 +112,7 @@ const Navbar = () => {
 
       // 1. Trường hợp thông báo liên quan đến ALBUM -> Chuyển hướng sang trang chi tiết album
       if (noti.albumId) {
-        navigate(`/albums/${noti.albumId}`);
+        navigate(`/albums/${noti.albumId}`); // Hoặc đường dẫn route album của bồ (ví dụ: /playlist/... hay /album/...)
         return;
       }
 
@@ -203,7 +189,8 @@ const Navbar = () => {
     } catch (error) {
       console.error("Logout API error:", error);
     } finally {
-      useFavoriteStore.getState().clearLikedStore?.();
+      useFavoriteStore.getState().clearFavoriteStore?.();
+      useFollowStore.getState().clearFollowStore?.();
       usePlaylistStore.getState().clearPlaylistStore?.();
 
       logout();
@@ -238,7 +225,7 @@ const Navbar = () => {
     <header className="h-20 flex items-center justify-between px-8 bg-[#09090b] border-b border-[#282828] sticky top-0 z-50 font-sans text-white">
       {/* Thanh tìm kiếm */}
       <div className="flex items-center bg-[#121212] rounded-full px-5 py-2.5 w-80 border border-[#282828] focus-within:border-blue-500 transition-all">
-        <Search className="text-[#a7a7a7] mr-3" size={20} />
+        <Search onClick={executeSearch} className="text-[#a7a7a7] mr-3 cursor-pointer hover:text-white transition-colors" size={20} title="Tìm kiếm" />
         <input
           type="text"
           value={searchQuery}
@@ -345,7 +332,6 @@ const Navbar = () => {
                     ? img
                     : `https://ui-avatars.com/api/?name=${username || "U"}&background=0D8BFF&color=fff&bold=true&size=128`
                 }
-                type={role === "artist" ? "artist" : "user"}
                 alt="User Avatar"
                 className="w-full h-full object-cover"
               />

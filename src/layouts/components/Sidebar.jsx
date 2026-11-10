@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Home,
+  Search,
   Library,
   PlusSquare,
   Heart,
@@ -127,6 +128,12 @@ const Sidebar = () => {
           <Home size={22} /> Trang chủ
         </Link>
 
+              <Link
+          to="/search"
+          className={`flex items-center gap-4 hover:text-sky-400 transition-all ${!isAdminPage && location.pathname === "/search" ? "text-sky-400 font-semibold" : ""}`}
+        >
+          <Search size={22} /> Tìm kiếm
+        </Link>
       </nav>
 
       {/* DANH SÁCH MENU DÀNH RIÊNG CHO ADMIN */}
